@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>My Browser</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: #000; color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+  /* ===== TOP BAR ===== */
+  .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: #0a0a0a; border-bottom: 1px solid #1c1c1e;
+    padding: 8px 8px 6px 8px; padding-top: env(safe-area-inset-top, 8px); }
+
+  .navrow { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .navbtn { flex: 0 0 auto; width: 36px; height: 36px; border: none;
+    background: #1c1c1e; color: #fff; border-radius: 10px; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background .12s, transform .08s; }
+  .navbtn:active { background: #2c2c2e; transform: scale(.92); }
+  .navbtn:disabled { opacity: .3; }
+
+  .urlwrap { flex: 1; position: relative; }
+  .urlbar { width: 100%; height: 36px; background: #1c1c1e; border: 1px solid #2c2c2e;
+    border-radius: 18px; color: #fff; font-size: 14px; padding: 0 14px;
+    outline: none; transition: border-color .15s; }
+  .urlbar:focus { border-color: #0a84ff; }
+  .urlbar::placeholder { color: #48484a; }
+
+  .loadingline { height: 2px; background: #1c1c1e; border-radius: 2px;
+    overflow: hidden; opacity: 0; transition: opacity .2s; }
+  .loadingline.on { opacity: 1; }
+  .loadingline .bar { height: 100%; width: 40%; background: #0a84ff;
+    border-radius: 2px; animation: slide 1.1s infinite ease-in-out; }
+  @keyframes slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+
+  /* ===== WEBVIEW ===== */
+  .frame { position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 86px);
+    background: #fff; }
+  iframe { width: 100%; height: 100%; border: none; background: #fff; display: block; }
+
+  /* ===== SNIFF BUTTON (bottom right) ===== */
+  .sniff-fab { position: fixed; right: 16px; bottom: 24px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    width: 56px; height: 56px; border-radius: 50%; border: none;
+    background: #0a84ff; color: #fff; font-size: 22px; z-index: 200;
+    box-shadow: 0 6px 20px rgba(10,132,255,.5); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .1s, background .15s; }
+  .sniff-fab:active { transform: scale(.9); background: #0070e0; }
+  .badge { position: absolute; top: -4px; right: -4px; min-width: 22px;
+    height: 22px; padding: 0 6px; background: #ff3b30; color: #fff;
+    border-radius: 11px; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #000; }
+
+  /* ===== PANEL ===== */
+  .panel { position: fixed; left: 0; right: 0; bottom: 0; z-index: 300;
+    background: #0a0a0a; border-top: 1px solid #1c1c1e;
+    border-radius: 20px 20px 0 0; max-height: 75vh;
+    display: none; flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -8px 30px rgba(0,0,0,.6); }
+  .panel.open { display: flex; animation: up .2s ease-out; }
+  @keyframes up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .phead { padding: 14px 18px 10px 18px; display: flex; justify-content: space-between;
+    align-items: center; border-bottom: 1px solid #1c1c1e; }
+  .phead h2 { font-size: 16px; font-weight: 600; }
+  .pclose { background: #1c1c1e; border: none; color: #8e8e93;
+    width: 30px; height: 30px; border-radius: 50%; font-size: 15px;
+    cursor: pointer; }
+
+  .plist { overflow-y: auto; padding: 8px 12px 20px 12px; flex: 1;
+    -webkit-overflow-scrolling: touch; }
+
+  .vitem { background: #161618; border-radius: 14px; padding: 12px;
+    margin-bottom: 10px; border-left: 3px solid #0a84ff; }
+  .vrow { display: flex; gap: 10px; align-items: flex-start; }
+  .vthumb { width: 72px; height: 54px; border-radius: 8px; background: #000;
+    flex: 0 0 auto; overflow: hidden; display: flex; align-items: center;
+    justify-content: center; color: #48484a; font-size: 20px; }
+  .vthumb video, .vthumb img { width: 100%; height: 100%; object-fit: cover; }
+  .vinfo { flex: 1; min-width: 0; }
+  .vname { font-size: 13px; font-weight: 600; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+  .vmeta { font-size: 11px; color: #8e8e93; margin-bottom: 2px; }
+  .vtype { display: inline-block; background: rgba(10,132,255,.15);
+    color: #0a84ff; font-size: 10px; font-weight: 700; padding: 2px 7px;
+    border-radius: 8px; margin-top: 3px; }
+
+  .vbtns { display: flex; gap: 8px; margin-top: 10px; }
+  .vbtn { flex: 1; border: none; border-radius: 10px; padding: 9px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: transform .08s, background .12s; }
+  .vbtn:active { transform: scale(.96); }
+  .vbtn.dl { background: #0a84ff; color: #fff; }
+  .vbtn.dl:active { background: #0070e0; }
+  .vbtn.pv { background: #2c2c2e; color: #fff; }
+
+  .empty { padding: 40px 24px; text-align: center; color: #636366;
+    font-size: 13px; line-height: 1.5; }
+  .empty b { color: #8e8e93; }
+
+  .vpreview { margin-top: 10px; border-radius: 10px; overflow: hidden;
+    background: #000; display: none; }
+  .vpreview.on { display: block; }
+  .vpreview video { width: 100%; max-height: 180px; display: block; }
+</style>
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="navrow">
+      <button class="navbtn" id="backBtn" title="Back">◀</button>
+      <button class="navbtn" id="fwdBtn" title="Forward">▶</button>
+      <button class="navbtn" id="reloadBtn" title="Reload">⟳</button>
+      <div class="urlwrap">
+        <input type="text" class="urlbar" id="urlBar"
+               placeholder="Search or type URL"
+               autocomplete="off" autocorrect="off"
+               autocapitalize="off" spellcheck="false">
+      </div>
+      <button class="navbtn" id="homeBtn" title="Home">⌂</button>
+    </div>
+    <div class="loadingline" id="loadingLine"><div class="bar"></div></div>
+  </div>
+
+  <!-- WEBVIEW -->
+  <div class="frame">
+    <iframe id="webview" src="about:blank"
+      sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+      referrerpolicy="no-referrer"></iframe>
+  </div>
+
+  <!-- SNIFF FAB -->
+  <button class="sniff-fab" id="sniffFab">
+    ⬇<span class="badge" id="sniffBadge" style="display:none;">0</span>
+  </button>
+
+  <!-- PANEL -->
+  <div class="panel" id="panel">
+    <div class="phead">
+      <h2 id="panelTitle">Sniffed videos</h2>
+      <button class="pclose" id="panelClose">✕</button>
+    </div>
+    <div class="plist" id="panelList">
+      <div class="empty">Tap <b>Sniff</b> to scan this page for videos.</div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  var HOME = 'https://www.google.com';
+  var frame = document.getElementById('webview');
+  var urlBar = document.getElementById('urlBar');
+  var backBtn = document.getElementById('backBtn');
+  var fwdBtn = document.getElementById('fwdBtn');
+  var reloadBtn = document.getElementById('reloadBtn');
+  var homeBtn = document.getElementById('homeBtn');
+  var loadingLine = document.getElementById('loadingLine');
+  var sniffFab = document.getElementById('sniffFab');
+  var sniffBadge = document.getElementById('sniffBadge');
+  var panel = document.getElementById('panel');
+  var panelList = document.getElementById('panelList');
+  var panelTitle = document.getElementById('panelTitle');
+  var panelClose = document.getElementById('panelClose');
+
+  var history = [HOME];
+  var hIndex = 0;
+  var videos = []; // sniffed videos for current page
+
+  // ----- helpers -----
+  function normalizeUrl(q) {
+    q = q.trim();
+    if (!q) return HOME;
+    if (/^https?:\/\//i.test(q)) return q;
+    // treat as search if it has spaces or no dot
+    if (/\s/.test(q) || !/\./.test(q)) {
+      return 'https://www.google.com/search?q=' + encodeURIComponent(q);
+    }
+    return 'https://' + q;
+  }
+
+  function setLoading(on) {
+    loadingLine.classList.toggle('on', on);
+  }
+
+  function updateNav() {
+    backBtn.disabled = hIndex <= 0;
+    fwdBtn.disabled = hIndex >= history.length - 1;
+  }
+
+  // ----- navigation -----
+  function navigate(url, push) {
+    if (push === undefined) push = true;
+    url = normalizeUrl(url);
+    if (push) {
+      history = history.slice(0, hIndex + 1);
+      history.push(url);
+      hIndex = history.length - 1;
+    }
+    urlBar.value = url;
+    setLoading(true);
+    try { frame.src = url; } catch (e) { console.warn(e); }
+    videos = []; // reset per page
+    updateBadge();
+    updateNav();
+  }
+
+  // ----- iframe events -----
+  frame.addEventListener('load', function(){
+    setLoading(false);
+    try {
+      var doc = frame.contentDocument || frame.contentWindow.document;
+      if (doc) {
+        // clicked-link feedback
+        var st = doc.createElement('style');
+        st.textContent = 'a:active,button:active,[role="button"]:active{' +
+          'opacity:.55!important;transform:scale(.97)!important;' +
+          'transition:all .05s!important;}' +
+          'a:visited{color:#a78bfa!important;}';
+        doc.head && doc.head.appendChild(st);
+
+        // update URL bar to real URL if same-origin
+        try {
+          var real = frame.contentWindow.location.href;
+          if (real && real !== 'about:blank') urlBar.value = real;
+        } catch (e) {}
+      }
+    } catch (e) { /* cross-origin: fine */ }
+  });
+
+  frame.addEventListener('error', function(){ setLoading(false); });
+
+  // ----- URL bar -----
+  urlBar.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigate(urlBar.value);
+      urlBar.blur();
+    }
+  });
+  urlBar.addEventListener('focus', function(){ this.select(); });
+
+  // ----- nav buttons -----
+  backBtn.addEventListener('click', function(){
+    if (hIndex > 0) { hIndex--; navigate(history[hIndex], false); }
+  });
+  fwdBtn.addEventListener('click', function(){
+    if (hIndex < history.length - 1) { hIndex++; navigate(history[hIndex], false); }
+  });
+  reloadBtn.addEventListener('click', function(){
+    setLoading(true);
+    try { frame.src = frame.src; } catch(e){}
+  });
+  homeBtn.addEventListener('click', function(){ navigate(HOME); });
+
+  // ----- badge -----
+  function updateBadge() {
+    if (videos.length > 0) {
+      sniffBadge.textContent = videos.length;
+      sniffBadge.style.display = 'flex';
+    } else {
+      sniffBadge.style.display = 'none';
+    }
+  }
+
+  // ----- sniff -----
+  function isVideoUrl(u) {
+    if (!u) return false;
+    var clean = u.split('?')[0].split('#')[0].toLowerCase();
+    return /\.(mp4|webm|m3u8|mov|m4v|ts|mkv|flv|avi)$/.test(clean);
+  }
+
+  function guessType(u) {
+    var ext = u.split('?')[0].split('.').pop().toLowerCase();
+    return {
+      mp4:'video/mp4', m4v:'video/mp4', webm:'video/webm',
+      m3u8:'application/x-mpegURL', mov:'video/quicktime',
+      mkv:'video/x-matroska', flv:'video/x-flv',
+      avi:'video/x-msvideo', ts:'video/mp2t'
+    }[ext] || 'video/mp4';
+  }
+
+  function sniff() {
+    videos = [];
+    var found = {};
+
+    function add(u, type) {
+      if (!u) return;
+      try {
+        if (frame.contentDocument && frame.contentDocument.baseURI) {
+          u = new URL(u, frame.contentDocument.baseURI).href;
+        }
+      } catch(e){}
+      if (!u || found[u]) return;
+      if (!isVideoUrl(u)) return;
+      found[u] = true;
+      var name = decodeURIComponent(u.split('/').pop().split('?')[0]) || 'video';
+      videos.push({ url: u, type: type || guessType(u), name: name });
+    }
+
+    try {
+      var doc = frame.contentDocument || frame.contentWindow.document;
+      if (!doc) throw new Error('cross-origin');
+
+      // <video> tags and their sources
+      doc.querySelectorAll('video').forEach(function(v){
+        if (v.currentSrc) add(v.currentSrc, v.type);
+        if (v.src) add(v.src, v.type);
+        v.querySelectorAll('source').forEach(function(s){
+          if (s.src) add(s.src, s.type);
+        });
+      });
+
+      // <a> links to video files
+      doc.querySelectorAll('a[href]').forEach(function(a){
+        if (isVideoUrl(a.href)) add(a.href);
+      });
+
+      // any element with data-src / data-video
+      doc.querySelectorAll('[data-src],[data-video],[data-video-src]').forEach(function(el){
+        var v = el.dataset.src || el.dataset.video || el.dataset.videoSrc;
+        if (isVideoUrl(v)) add(v);
+      });
+
+      // scripts mentioning .mp4/.m3u8 (light scan)
+      doc.querySelectorAll('script:not([src])').forEach(function(s){
+        var txt = s.textContent || '';
+        var matches = txt.match(/https?:\/\/[^\s"'`]+\.(mp4|m3u8|webm|mov|m4v)/gi);
+        if (matches) matches.forEach(function(m){ if (isVideoUrl(m)) add(m); });
+      });
+
+    } catch(e) {
+      // cross-origin — cannot scan. Show honest message.
+      videos = [];
+    }
+
+    updateBadge();
+    renderPanel();
+  }
+
+  function renderPanel() {
+    panelTitle.textContent = videos.length === 0
+      ? 'Sniffed videos'
+      : videos.length + ' video' + (videos.length > 1 ? 's' : '') + ' found';
+
+    if (videos.length === 0) {
+      panelList.innerHTML =
+        '<div class="empty">' +
+        '<b>No videos detected on this page.</b><br><br>' +
+        'Why? Most sites (YouTube, Facebook, TikTok) load videos through ' +
+        'JavaScript that HTML pages aren\'t allowed to read — that\'s a browser ' +
+        'security rule. This sniffer works on pages that put video URLs directly ' +
+        'in the HTML.' +
+        '</div>';
+      return;
+    }
+
+    var html = '';
+    videos.forEach(function(v, i){
+      html +=
+        '<div class="vitem">' +
+          '<div class="vrow">' +
+            '<div class="vthumb">🎬</div>' +
+            '<div class="vinfo">' +
+              '<div class="vname">' + esc(v.name) + '</div>' +
+              '<div class="vmeta">Size: unknown • Duration: unknown</div>' +
+              '<span class="vtype">' + esc(v.type.split('/')[1] || 'video').toUpperCase() + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="vbtns">' +
+            '<button class="vbtn pv" data-i="' + i + '" data-a="pv">👁 Preview</button>' +
+            '<button class="vbtn dl" data-i="' + i + '" data-a="dl">⬇ Download</button>' +
+          '</div>' +
+          '<div class="vpreview" id="pv-' + i + '"></div>' +
+        '</div>';
+    });
+    panelList.innerHTML = html;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  // panel click
+  panelList.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-a]');
+    if (!b) return;
+    var i = +b.dataset.i;
+    var v = videos[i];
+    if (!v) return;
+
+    if (b.dataset.a === 'pv') {
+      var box = document.getElementById('pv-' + i);
+      if (box.classList.contains('on')) {
+        box.classList.remove('on');
+        box.innerHTML = '';
+        return;
+      }
+      if (/m3u8/i.test(v.url)) {
+        box.innerHTML = '<div style="padding:14px;color:#8e8e93;font-size:12px;text-align:center;">' +
+          'HLS (m3u8) preview not supported in browser. Download and convert with 1DM or FFmpeg.</div>';
+      } else {
+        box.innerHTML = '<video controls playsinline preload="metadata" src="' +
+          esc(v.url) + '"></video>';
+      }
+      box.classList.add('on');
+    }
+
+    if (b.dataset.a === 'dl') {
+      if (/m3u8/i.test(v.url)) {
+        var a = document.createElement('a');
+        a.href = v.url; a.download = v.name || 'playlist.m3u8';
+        document.body.appendChild(a); a.click(); a.remove();
+        alert('Playlist downloaded. Use 1DM or an FFmpeg-based converter to turn it into MP4.');
+      } else {
+        var a2 = document.createElement('a');
+        a2.href = v.url; a2.download = v.name || 'video.mp4';
+        a2.target = '_blank';
+        document.body.appendChild(a2); a2.click(); a2.remove();
+      }
+    }
+  });
+
+  // FAB & panel
+  sniffFab.addEventListener('click', function(){
+    sniff();
+    panel.classList.add('open');
+  });
+  panelClose.addEventListener('click', function(){
+    panel.classList.remove('open');
+  });
+
+  // boot
+  navigate(HOME);
+})();
+</script>
+</body>
+</html>
